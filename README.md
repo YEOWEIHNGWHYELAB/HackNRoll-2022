@@ -1,7 +1,7 @@
-# HacknRoll 2022
+# 2D-MultiAI-PlayGround
 
 ## Prerequisites
-Install the required packages before running our program and [pytorch](https://pytorch.org/get-started/locally/)
+Install the required packages before running our program
 
 ```
 pip install -r requirements.txt
@@ -34,11 +34,12 @@ python server/telebot.py
 ```
 
 Message [@multiai_postman_bot](https://t.me/multiai_postman_bot) on telegram the commands to retrieve latest training information
-- /subscribe - Receive updates from learning model every 15 minutes
+- /subscribe - Receive updates from learning model every x minutes (If $interval_minute isn't specified, default is 15 minutes)
 - /unsubscribe - Stop receiving updates from learning model
 - /update - Retrieves the latest update from learning model
 ```
-/(subscribe|unsubscribe|update) learn_id
+/subscribe $learn_id $interval_minute
+/(unsubscribe|update) $learn_id
 ```
 
 
