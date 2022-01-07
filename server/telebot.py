@@ -65,7 +65,6 @@ class TeleBot():
             update (Update): The message received on Telegram
             cb_context (CallbackContext): Context to be passed into repeating method
         """
-
         pattern = r"\/unsubscribe\s*(\w*)"
         try:
             learn_id = re.search(pattern, update.message.text).group(1)

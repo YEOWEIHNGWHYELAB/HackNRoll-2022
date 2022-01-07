@@ -298,6 +298,7 @@ def sio_connect():
 
 def sio_update(info: str):
     """Updates socketio server with latest information
+
     Args:
         data (str): [description]
     """
@@ -315,6 +316,7 @@ def sio_update(info: str):
 @sio.event
 def id_generation(id: str):
     """Updates learn_id upon receiving "id_generation" event from server
+
     Args:
         id (str): Generated learn_id to be used for this training session
     """

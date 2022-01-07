@@ -65,6 +65,7 @@ def threaded_client(conn, player_index, game_id):
                     break
                 # If got Info
                 else:
+                    # Check both player ready
                     if data[0] == 1:
                         conn.sendall(str.encode(str(games_session[game_id][2])))
                     elif data[0] == 2:
@@ -83,21 +84,25 @@ def threaded_client(conn, player_index, game_id):
                         conn.sendall(str.encode(str("OK")))
                     # Ready Status
                     elif data[0] == 4:
+                        # Player 1 -> Set self to ready while setting Player 0 to not ready
                         if player_index == 1:
                             games_session[game_id][8] = 1
                             games_session[game_id][7] = 0
                             conn.sendall(str.encode(str(games_session[game_id][8])))
+                        # Player 0 -> Set self to ready while setting Player 1 to not ready
                         else:
                             games_session[game_id][8] = 0
                             games_session[game_id][7] = 1
                             conn.sendall(str.encode(str(games_session[game_id][7])))
-                    # Not Ready Status
+                    # Check other player is ready
                     elif data[0] == 5:
+                        # Player 1 -> See if Player 0 is ready already
                         if player_index == 1:
                             if games_session[game_id][7] == 1:
                                 conn.sendall(str.encode(str("1")))
                             else:
                                 conn.sendall(str.encode(str("0")))
+                        # Player 0 -> See if Player 1 is ready already
                         else:
                             if games_session[game_id][8] == 1:
                                 conn.sendall(str.encode(str("0")))
@@ -140,8 +145,11 @@ while True:
     current_player = 0
     game_id = (idCount - 1) // 2
 
-    # If is player 1
+    # If is player 1 (Game Host)
     if idCount % 2 == 1:
+        # Initialize List
+        # (PLAYER_1_XY_FIRED_BULLET_XY_ANGLE), (PLAYER_2_XY_FIRED_BULLET_XY_ANGLE), BOTH_PLAYER_READY_BOOL,
+        # SCORE_P1, AVG_REWARD_P1, SCORE_P2, AVG_REWARD_P2, PLAYER_1_READY_BOOL, PLAYER_2_READY_BOOL
         games_session[game_id] = [(server_const.START_POS_P1_X, server_const.START_POS_P1_Y, False, 0, 0, -1),
                                   (server_const.START_POS_P2_X, server_const.START_POS_P2_Y, False, 0, 0, -1), 0,
                                   0, 0.0, 0, 0.0, 0, 0]
