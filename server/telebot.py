@@ -24,6 +24,14 @@ class TeleBot():
         self.updater.idle()
 
     def subscribe(self, update: Update, cb_context: CallbackContext):
+        """Called when telegram receives the "/subscribe" command
+           Adds user who sent it to the subscribers list, notifying
+           them of the latest info received every 30 minutes 
+        Args:
+            update (Update): The message received on Telegram
+            cb_context (CallbackContext): Context to be passed into repeating method
+        """
+
         pattern = r"\/subscribe\s*(\w*)"
         try:
             learn_id = re.search(pattern, update.message.text).group(1)
@@ -41,6 +49,14 @@ class TeleBot():
             update.message.reply_text("Error with your message")
 
     def unsubscribe(self, update: Update, cb_context: CallbackContext):
+        """Called when telegram receives the "/unsubscribe" command
+           Removes user who sent it from the subscribers list, stopping
+           notifications of the latest info received every 30 minutes 
+        Args:
+            update (Update): The message received on Telegram
+            cb_context (CallbackContext): Context to be passed into repeating method
+        """
+
         pattern = r"\/unsubscribe\s*(\w*)"
         try:
             learn_id = re.search(pattern, update.message.text).group(1)
@@ -60,6 +76,13 @@ class TeleBot():
             update.message.reply_text("Error with your message")
 
     def get_update(self, update: Update, cb_context: CallbackContext):
+        """Called when telegram receives the "/update" command
+           Sends the user the latest info received from training
+        Args:
+            update (Update): The message received on Telegram
+            cb_context (CallbackContext): Context to be passed into repeating method
+        """
+
         pattern = r"\/update\s*(\w*)"
         try:
             learn_id = re.search(pattern, update.message.text).group(1)
@@ -69,14 +92,22 @@ class TeleBot():
             update.message.reply_text("Error with your message")
 
     def send_update(self, cb_context: CallbackContext):
-        chat_id, learn_id = cb_context.job.context
+        """Repeating method, will call itself every 30 minutes if user subscribes
+           to a particular learning session
+        Args:
+            cb_context (CallbackContext): Context passed from subscribe() method
+        """
 
+        chat_id, learn_id = cb_context.job.context
         state = data_store.get_learning_state(learn_id)
 
         if not state == "":
             cb_context.bot.send_message(chat_id=chat_id, text=state)
         else:
-            print("Empty state")
+            cb_context.bot.send_message(
+                chat_id=chat_id,
+                text="There have been no updates"
+            )
 
 
 bot = TeleBot()
