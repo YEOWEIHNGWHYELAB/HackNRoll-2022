@@ -70,7 +70,8 @@ def cal_movement_reward(playerPosX, playerPosY):
     elif playerPosY >= 500 or playerPosY <= 30:
         edgePenalty = -0.5
 
-    final_movement_reward = hit_dodge_reward + near_enemy_reward + MOVEMENT_LIVING_PENALTY + edgePenalty
+    final_movement_reward = hit_dodge_reward + \
+        near_enemy_reward + MOVEMENT_LIVING_PENALTY + edgePenalty
 
     return final_movement_reward
 
@@ -265,6 +266,16 @@ def main():
             rocket_X = player_rocket.rect.x
             rocket_Y = player_rocket.rect.y
 
+        # Send Server and Receive Updates
+        player_state = game_data_to_string([player.rect.x, player.rect.y,
+                                            is_fired, rocket_X, rocket_Y, rocket_angle])
+        enemy_state = network.send(player_state)
+        enemy_state = read_game_data(enemy_state)
+        enemy.setpos(enemy_state[0], enemy_state[1])
+
+        # We check for rocket collision only after update game state because enemy needs the "hit" state
+        # Super inefficient but temporary workaround
+        if player_rocket is not None:
             if hit:
                 player_rocket = None
                 is_fired = False
@@ -272,13 +283,6 @@ def main():
             elif player_rocket.is_out_of_bounds():
                 player_rocket = None
                 is_fired = False
-
-        # Send Server and Receive Updates
-        player_state = game_data_to_string([player.rect.x, player.rect.y,
-                                            is_fired, rocket_X, rocket_Y, rocket_angle])
-        enemy_state = network.send(player_state)
-        enemy_state = read_game_data(enemy_state)
-        enemy.setpos(enemy_state[0], enemy_state[1])
 
         # Check did enemy fire
         if enemy_state[INDEX_OF_IS_FIRED]:
@@ -302,14 +306,15 @@ def main():
                 hit_dodge_reward = 0.0
             else:
                 # Hit Player
-                print(enemy_rocket)
                 if pygame.sprite.collide_rect(player, enemy_rocket):
                     hit_dodge_reward = -1.0
                     enemy_fired = False
+                    print("I was hit!!!")
                 # Went out of bound
                 else:
                     hit_dodge_reward = 1.0
                     enemy_fired = False
+                    print("Enemy missed!!!")
 
         # Update Movement Param
         enemyPosX = enemy_state[0]
@@ -318,7 +323,8 @@ def main():
         playerPosY = player.rect.y
 
         # Update Shooting Param
-        distancePlayerToEnemy = ((((enemyPosX - playerPosX) ** 2) + ((enemyPosY - playerPosY) ** 2)) ** 0.5)
+        distancePlayerToEnemy = (
+            (((enemyPosX - playerPosX) ** 2) + ((enemyPosY - playerPosY) ** 2)) ** 0.5)
 
         # Update Rewards
         if distancePlayerToEnemy <= 300:
@@ -326,18 +332,20 @@ def main():
         else:
             near_enemy_reward = -0.1
         last_reward_movement = cal_movement_reward(playerPosX, playerPosY)
-        print(near_enemy_reward, hit_dodge_reward)
+        #print(near_enemy_reward, hit_dodge_reward)
         # last_reward_shooting = cal_shooting_reward()
 
         # last_state update
-        last_state_movement = [enemyPosX, enemyPosY, enemyBulletX, enemyBulletY, playerPosX, playerPosY]
+        last_state_movement = [enemyPosX, enemyPosY,
+                               enemyBulletX, enemyBulletY, playerPosX, playerPosY]
         # last_state_shooting = [is_Fired, anglePlayerToEnemy, gunVector, distancePlayerToEnemy]
         # print(last_state_movement)
         # print(last_state_shooting)
 
         # Toggle AI control and manual control
         if not manaul_ctrl:
-            next_action_movement = dqnMovement.update(last_reward_movement, last_state_movement)
+            next_action_movement = dqnMovement.update(
+                last_reward_movement, last_state_movement)
             avg_score_movement = dqnMovement.overall_score()
             sliding_window_scores_Move.append(avg_score_movement)
             player.ai_move(next_action_movement)
@@ -348,7 +356,6 @@ def main():
             # ai_shoot(next_action_shooting)
         else:
             player.manual_move()
-
 
         # Draw onto screen
         draw_window(screen, soldier_group, player_rocket,
