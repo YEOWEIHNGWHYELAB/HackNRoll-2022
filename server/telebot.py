@@ -32,7 +32,7 @@ class TeleBot():
             cb_context (CallbackContext): Context to be passed into repeating method
         """
 
-        pattern = r"\/subscribe\s*(\d{1,})(\s\d{1,})?"
+        pattern = r"\/subscribe\s*(\d+)(\s\d+)?"
         try:
             username = update.message.from_user.name
             search = re.search(pattern, update.message.text)
