@@ -17,12 +17,16 @@ class Network(nn.Module):
         super(Network, self).__init__()
         self.input_size = input_size
         self.nb_action = nb_action
-        self.fc1 = nn.Linear(input_size, 30)
-        self.fc2 = nn.Linear(30, nb_action)
+        self.fc1 = nn.Linear(input_size, 35)
+        self.fc2 = nn.Linear(35, 35)
+        self.fc3 = nn.Linear(35, 35)
+        self.fc4 = nn.Linear(35, nb_action)
 
     def forward(self, state):
         x = F.relu(self.fc1(state))
-        q_values = self.fc2(x)
+        x2 = F.relu(self.fc2(x))
+        x3 = F.relu(self.fc3(x2))
+        q_values = self.fc4(x3)
         return q_values
 
 
@@ -49,7 +53,7 @@ class Dqn(object):
         self.sliding_reward_window = []
         self.model = Network(input_size, nb_action)
         self.memory = ReplayMemory(100000)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
         self.last_state = torch.Tensor(input_size).unsqueeze(0)
         self.last_action = 0
         self.last_reward = 0
@@ -80,7 +84,7 @@ class Dqn(object):
         self.last_state = new_state
         self.last_reward = reward
         self.sliding_reward_window.append(reward)
-        if len(self.sliding_reward_window) > 1000:
+        if len(self.sliding_reward_window) > 5000:
             del self.sliding_reward_window[0]
         return action
 

@@ -1,4 +1,5 @@
 import pygame
+import random
 from matplotlib import pyplot as plt
 
 from network import Network
@@ -17,7 +18,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 INDEX_OF_IS_FIRED = 2
 
 # Movement Reward Const
-MOVEMENT_LIVING_PENALTY = -0.005
+MOVEMENT_LIVING_PENALTY = -0.3
 HIT_PENALTY = -1.0
 NEAR_ENEMY_REWARD = 0.05
 DODGE_REWARD = 0.2
@@ -48,7 +49,7 @@ playerPosY = 0
 is_Fired = False
 anglePlayerToEnemy = 0
 distancePlayerToEnemy = 0
-gunVector = 0
+gun_vector = 0
 
 # Reward for shooting
 hit_reward = 0
@@ -70,25 +71,25 @@ def cal_shooting_reward():
 
 def cal_movement_reward(playerPosX, playerPosY):
     global hit_dodge_reward, near_enemy_reward
-    # edgePenalty = 0
+    edgePenalty = 0
 
-    # if playerPosX >= 700 or playerPosX <= 30:
-        # edgePenalty = -1.0
-    # elif playerPosY >= 500 or playerPosY <= 30:
-        # edgePenalty = -1.0
+    if playerPosX >= 700 or playerPosX <= 30:
+        edgePenalty = -1.0
+    elif playerPosY >= 500 or playerPosY <= 30:
+        edgePenalty = -1.0
 
-    # final_movement_reward = hit_dodge_reward + near_enemy_reward + MOVEMENT_LIVING_PENALTY + edgePenalty
-    final_movement_reward = hit_dodge_reward + MOVEMENT_LIVING_PENALTY + near_enemy_reward
+    final_movement_reward = hit_dodge_reward + \
+        near_enemy_reward + MOVEMENT_LIVING_PENALTY + edgePenalty
 
     return final_movement_reward
 
 
 def ai_firing(rocket_group, player):
-    rocket_group.add(player.shoot_angle(gunVector))
+    rocket_group.add(player.shoot_angle(gun_vector))
 
 
 def ai_shoot(next_action, rocket_group, player):
-    global gunVector, is_Fired, gun_ready_reward
+    global gun_vector, is_Fired, gun_ready_reward
 
     if next_action == 0:
         if (gunVector + gunVectorDeltaFineA) > 360:
@@ -179,17 +180,9 @@ def display_hit_count(screen, x, y, font):
     screen.blit(curr_avg, (x, y + 30))
 
 
-def display_hit_status(screen, x, y, font, hit_miss):
-    if hit_miss is False:
-        hit_stat = font.render("Missed Me!" + str(num_hit), True, (255, 255, 255))
-    else:
-        hit_stat = font.render("I'm Hit!" + str(num_hit), True, (255, 255, 255))
-    screen.blit(hit_stat, (x, y))
-
-
 def main():
     # Shooting Global Var
-    global is_Fired, gunVector, anglePlayerToEnemy, distancePlayerToEnemy, bulletPosX, bulletPosY
+    global is_Fired, gun_vector, anglePlayerToEnemy, distancePlayerToEnemy, bulletPosX, bulletPosY
     global gunVectorDeltaFineA, gunVectorDeltaCoarseA, gunVectorDeltaFine, gunVectorDeltaCoarse
     global hit_reward, reward_pointing_near_target, gun_ready_reward, num_hit
 
@@ -223,7 +216,7 @@ def main():
     # DQN Network Initialization
     manaul_ctrl = False
     sliding_window_scores_Move = []
-    dqnMovement = ai_network.Dqn(4, 4, 0.80)
+    dqnMovement = ai_network.Dqn(6, 4, 0.75)
 
     # Initialize Data
     initial_state = [(server.server_const.START_POS_P1_X, server.server_const.START_POS_P1_Y, False, 0, 0, -1),
@@ -238,6 +231,7 @@ def main():
     soldier_group = pygame.sprite.Group()
     soldier_group.add(player)
     soldier_group.add(enemy)
+    number_step = 0
 
     # Rocket Management
     is_fired = False
@@ -247,7 +241,6 @@ def main():
     rocket_Y = 0
     rocket_angle = -1
     count_delay = 0
-    hit_status = False
 
     # Polling for second player.
     while not_ready:
@@ -268,7 +261,7 @@ def main():
     # Main Loop
     while running:
         # set game to 30fps
-        clock.tick(60)
+        clock.tick(90)
 
         # Button and Manual Firing
         for event in pygame.event.get():
@@ -299,8 +292,8 @@ def main():
                     string_to_send = game_progress_avg()
                     print(network.send("3," + string_to_send))
 
-        is_client_ready_check = network.send("4")
         # Server Synchronizing
+        is_client_ready_check = network.send("4")
         while is_server_sync:
             is_client_ready_confirm = network.send("5")
             if int(is_client_ready_confirm) == player_number:
@@ -311,7 +304,7 @@ def main():
 
         if manaul_ctrl is False and is_fired is False:
             count_delay += 1
-            if count_delay > 20:
+            if count_delay > 5:
                 count_delay = 0
                 is_fired = True
                 player_rocket = player.shoot((enemyPosX + 25, enemyPosY + 28))
@@ -344,7 +337,6 @@ def main():
                 is_fired = False
 
         # Check did enemy fire
-        # hit_status = False
         if enemy_state[INDEX_OF_IS_FIRED]:
             enemy_fired = True
             if enemy_rocket is None:
@@ -367,9 +359,8 @@ def main():
             else:
                 # Hit Player
                 if pygame.sprite.collide_rect(player, enemy_rocket):
-                    hit_dodge_reward = -6.0
+                    hit_dodge_reward = -1.0
                     enemy_fired = False
-                    # hit_status = True
                     # print("I was hit!!!")
                 # Went out of bound
                 else:
@@ -385,16 +376,16 @@ def main():
 
         # Update Shooting Param
         distancePlayerToEnemy = (
-            (((enemyBulletX - playerPosX) ** 2) + ((enemyBulletY - playerPosY) ** 2)) ** 0.5)
+            (((enemyPosX - playerPosX) ** 2) + ((enemyPosY - playerPosY) ** 2)) ** 0.5)
 
         # Update Rewards
-        if distancePlayerToEnemy <= 100.0:
-            near_enemy_reward = -1.0
+        if distancePlayerToEnemy <= 200:
+            near_enemy_reward = -0.9
+        elif distancePlayerToEnemy <= 400:
+            near_enemy_reward = NEAR_ENEMY_REWARD
         else:
-            near_enemy_reward = 0
+            near_enemy_reward = -0.3
         last_reward_movement = cal_movement_reward(playerPosX, playerPosY)
-        # print(last_reward_movement)
-        # print(last_reward_movement)
 
         if enemyBulletX < 0:
             enemyBulletX = 0
@@ -402,27 +393,31 @@ def main():
             enemyBulletY = 0
 
         # last_state update
-        # last_state_movement = [enemyPosX / 800.0, enemyPosY / 600.0,
-                               # enemyBulletX / 800.0, enemyBulletY / 600.0, playerPosX / 800.0, playerPosY / 600.0]
-        # last_state_movement = [enemyBulletX / 800.0, enemyBulletY / 600.0, distancePlayerToEnemy / 1000.0, playerPosX / 800.0, playerPosY / 600.0]
-        last_state_movement = [(enemyBulletX / 800.0), (enemyBulletY / 600.0), playerPosX / 800.0, playerPosY / 600.0]
-        # last_state_movement = [enemyBulletX, enemyBulletY, playerPosX, playerPosY]
-        # print(last_reward_movement)
+        last_state_movement = [enemyPosX / 800.0, enemyPosY / 600.0,
+                               enemyBulletX / 800.0, enemyBulletY / 600.0, playerPosX / 800.0, playerPosY / 600.0]
 
         # Toggle AI control and manual control
         if not manaul_ctrl:
-            next_action_movement = dqnMovement.update(
-                last_reward_movement, last_state_movement)
-            avg_score_movement = dqnMovement.overall_score()
-            sliding_window_scores_Move.append(avg_score_movement)
-            player.ai_move(next_action_movement)
+            #decision = random.randint(0, 1)
+            #if decision == 1:
+                #next_action_movement = dqnMovement.update(
+                #    last_reward_movement, last_state_movement)
+                #avg_score_movement = dqnMovement.overall_score()
+                #sliding_window_scores_Move.append(avg_score_movement)
+                #player.ai_move(next_action_movement)
+            #else:
+            if number_step <= 0:
+                number_step = random.randint(1, 30)
+                action_to_take = random.randint(0, 3)
+
+            player.ai_move(action_to_take)
+            number_step -= 1
         else:
             player.manual_move()
 
         # Draw onto screen
         draw_window(screen, soldier_group, player_rocket,
                     enemy_state[INDEX_OF_IS_FIRED], enemy_rocket, stat_disp)
-        # display_hit_status(screen, 400, 10, stat_disp, hit_status)
         pygame.display.update()
 
     pygame.quit()
