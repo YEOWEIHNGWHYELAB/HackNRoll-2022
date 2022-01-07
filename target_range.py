@@ -23,7 +23,7 @@ LIVING_PENALTY = -0.3
 is_Fired = False
 anglePlayerToEnemy = 0
 distancePlayerToEnemy = 0
-gunVector = 0
+gun_vector = 0
 bulletPosX = 0
 bulletPosY = 0
 
@@ -41,6 +41,7 @@ gun_ready_reward = 0
 # Telegram updater
 sio = socketio.Client()
 learn_id = "-1"
+action_count = 0
 
 
 def display_input_param(win, x, y, font, avg_reward):
@@ -50,50 +51,50 @@ def display_input_param(win, x, y, font, avg_reward):
         "Distance: " + str(format_float_avg_reward), True, (255, 255, 255))
     win.blit(distance, (x, y))
 
-    angleEn = anglePlayerToEnemy
-    format_float_angle = "{:.2f}".format(angleEn)
+    angle_en = anglePlayerToEnemy
+    format_float_angle = "{:.2f}".format(angle_en)
     angle = font.render(
         "Enemy Angle: " + str(format_float_angle), True, (255, 255, 255))
     win.blit(angle, (x, y + 30))
 
     gunPoint = font.render(
-        "Gun Angle: " + str(gunVector), True, (255, 255, 255))
+        "Gun Angle: " + str(gun_vector), True, (255, 255, 255))
     win.blit(gunPoint, (x, y + 60))
 
     avgR = avg_reward
     format_float_avg_reward = "{:.2f}".format(avgR)
-    avgReward = font.render(
+    avg_reward = font.render(
         "AVG_Reward: " + str(format_float_avg_reward), True, (255, 255, 255))
-    win.blit(avgReward, (x, y + 90))
+    win.blit(avg_reward, (x, y + 90))
 
 
 def ai_firing(rocket_group, player):
-    rocket_group.add(player.shoot_angle(gunVector))
+    rocket_group.add(player.shoot_angle(gun_vector))
 
 
 def ai_control(next_action, rocket_group, player):
-    global gunVector, is_Fired, gun_ready_reward
+    global gun_vector, is_Fired, gun_ready_reward
 
     if next_action == 0:
-        if (gunVector + gunVectorDeltaFineA) > 360:
-            gunVector += (gunVectorDeltaFineA - 360)
+        if (gun_vector + gunVectorDeltaFineA) > 360:
+            gun_vector += (gunVectorDeltaFineA - 360)
         else:
-            gunVector += gunVectorDeltaFineA
+            gun_vector += gunVectorDeltaFineA
     elif next_action == 1:
-        if (gunVector + gunVectorDeltaCoarseA) > 360:
-            gunVector += (gunVectorDeltaCoarseA - 360)
+        if (gun_vector + gunVectorDeltaCoarseA) > 360:
+            gun_vector += (gunVectorDeltaCoarseA - 360)
         else:
-            gunVector += gunVectorDeltaCoarseA
+            gun_vector += gunVectorDeltaCoarseA
     elif next_action == 2:
-        if (gunVector + gunVectorDeltaFine) < 0:
-            gunVector += (gunVectorDeltaFine + 360)
+        if (gun_vector + gunVectorDeltaFine) < 0:
+            gun_vector += (gunVectorDeltaFine + 360)
         else:
-            gunVector += gunVectorDeltaFine
+            gun_vector += gunVectorDeltaFine
     elif next_action == 3:
-        if (gunVector + gunVectorDeltaCoarse) < 0:
-            gunVector += (gunVectorDeltaCoarse + 360)
+        if (gun_vector + gunVectorDeltaCoarse) < 0:
+            gun_vector += (gunVectorDeltaCoarse + 360)
         else:
-            gunVector += gunVectorDeltaCoarse
+            gun_vector += gunVectorDeltaCoarse
     else:
         # Only 1 bullet at a time
         if not is_Fired:
@@ -105,10 +106,10 @@ def ai_control(next_action, rocket_group, player):
 
 
 def main():
-    global is_Fired, anglePlayerToEnemy, distancePlayerToEnemy, bulletPosX, bulletPosY, gunVector
+    global is_Fired, anglePlayerToEnemy, distancePlayerToEnemy, bulletPosX, bulletPosY, gun_vector
     global gunVectorDeltaFineA, gunVectorDeltaCoarseA, gunVectorDeltaFine, gunVectorDeltaCoarse
     global hit_reward, reward_pointing_near_target, gun_ready_reward
-    global sio
+    global sio, action_count
 
     # AI Param
     manaul_ctrl = False
@@ -150,8 +151,6 @@ def main():
                 running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
-                    sio_update(f"last_reward: {last_reward}")
-
                     dqnShooting.save(SHOOTING_AI_NETWORK)
                     plt.plot(sliding_window_scores)
                     plt.show()
@@ -169,7 +168,7 @@ def main():
                     ai_control(3, rocket_group, player)
                 elif event.key == pygame.K_SPACE and manaul_ctrl:
                     if not is_Fired:
-                        rocket_group.add(player.shoot_angle(gunVector))
+                        rocket_group.add(player.shoot_angle(gun_vector))
                         is_Fired = True
 
         # collision detection for all spawned rockets
@@ -248,7 +247,7 @@ def main():
             (((target.rect.x - player.rect.x) ** 2) + ((target.rect.y - player.rect.y) ** 2)) ** 0.5)
 
         # Reward Management
-        if abs(anglePlayerToEnemy - gunVector) <= 30:
+        if abs(anglePlayerToEnemy - gun_vector) <= 30:
             reward_pointing_near_target = POINTING_GUN_AT_TARGET_REWARD
         last_reward = reward_pointing_near_target + \
             gun_ready_reward + hit_reward + LIVING_PENALTY
@@ -256,7 +255,7 @@ def main():
         # DQN update
         if not manaul_ctrl:
             last_state = [is_Fired, (anglePlayerToEnemy / 360.0),
-                          (gunVector / 360.0), (distancePlayerToEnemy / 1000.0)]
+                          (gun_vector / 360.0), (distancePlayerToEnemy / 1000.0)]
             # print(last_state)
             # print(last_reward)
             next_action = dqnShooting.update(last_reward, last_state)
@@ -264,18 +263,23 @@ def main():
             sliding_window_scores.append(avg_score)
             ai_control(next_action, rocket_group, player)
 
+            action_count += 1
+            if action_count > 100:
+                action_count = 0
+                sio_update("Avg score: {:.2f}".format(avg_score))
+
         screen.fill((0, 0, 0))
         rocket_group.draw(screen)
         soldier_group.draw(screen)
-        player.draw_firing_angle(screen, gunVector)
+        player.draw_firing_angle(screen, gun_vector)
         player.draw_firing_angle(screen, anglePlayerToEnemy)
         display_input_param(screen, 0, 0, paramDisplay, avg_score)
         screen.blit(target.image, target.rect)
 
         pygame.display.update()
 
-    pygame.quit()
     sio.disconnect()
+    pygame.quit()
 
 
 def sio_connect():
@@ -283,8 +287,13 @@ def sio_connect():
     """
 
     global sio
-    sio.connect(f"http://{HOST_IP_ADDRESS}:{HOST_UPDATE_PORT}")
-    print("Connected to socket server, SID:", sio.sid)
+
+    try:
+        sio.connect(f"http://{HOST_IP_ADDRESS}:{HOST_UPDATE_PORT}")
+        print("Connected to socket server, SID:", sio.sid)
+
+    except Exception as e:
+        print(e)
 
 
 def sio_update(info: str):
@@ -296,11 +305,12 @@ def sio_update(info: str):
 
     global sio
 
-    data = {
-        "learn_id": learn_id,
-        "info": info
-    }
-    sio.emit("update", json.dumps(data))
+    if sio.connected:
+        data = {
+            "learn_id": learn_id,
+            "info": str(info)
+        }
+        sio.emit("update", json.dumps(data))
 
 
 @sio.event

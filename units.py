@@ -211,7 +211,7 @@ class Soldier(pygame.sprite.Sprite):
         dx = self.target.rect.centerx - self.rect.centerx
         return (math.atan2(dy, dx) * 180 / math.pi) + 180
 
-    def shoot(self, dest: Tuple[int]) -> Rocket:
+    def shoot(self, dest: Tuple[int, int]) -> Rocket:
         """Shoots a rocket at coordinate dest
 
         Args:

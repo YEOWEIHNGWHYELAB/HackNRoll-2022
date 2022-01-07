@@ -1,16 +1,19 @@
-import pygame
+import json
+import os
 import random
+import threading
+
+import pygame
+import socketio
 from matplotlib import pyplot as plt
 
-from network import Network
-
-from units import Soldier
-from units import Rocket
 import ai_network
-import server.server_const
 from const import MOVEMENT_AI_NETWORK
-
-import os
+from network import Network
+from server.server_const import START_POS_P1_X, START_POS_P1_Y, START_POS_P2_X, START_POS_P2_Y, HOST_IP_ADDRESS, \
+    HOST_UPDATE_PORT
+from units import Rocket
+from units import Soldier
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -64,9 +67,9 @@ near_enemy_reward = 0
 num_hit = 0
 avg_score_movement = 0.0
 
-
-def cal_shooting_reward():
-    pass
+# Telegram updater
+sio = socketio.Client()
+learn_id = "-1"
 
 
 def cal_movement_reward(playerPosX, playerPosY):
@@ -92,25 +95,25 @@ def ai_shoot(next_action, rocket_group, player):
     global gun_vector, is_Fired, gun_ready_reward
 
     if next_action == 0:
-        if (gunVector + gunVectorDeltaFineA) > 360:
-            gunVector += (gunVectorDeltaFineA - 360)
+        if (gun_vector + gunVectorDeltaFineA) > 360:
+            gun_vector += (gunVectorDeltaFineA - 360)
         else:
-            gunVector += gunVectorDeltaFineA
+            gun_vector += gunVectorDeltaFineA
     elif next_action == 1:
-        if (gunVector + gunVectorDeltaCoarseA) > 360:
-            gunVector += (gunVectorDeltaCoarseA - 360)
+        if (gun_vector + gunVectorDeltaCoarseA) > 360:
+            gun_vector += (gunVectorDeltaCoarseA - 360)
         else:
-            gunVector += gunVectorDeltaCoarseA
+            gun_vector += gunVectorDeltaCoarseA
     elif next_action == 2:
-        if (gunVector + gunVectorDeltaFine) < 0:
-            gunVector += (gunVectorDeltaFine + 360)
+        if (gun_vector + gunVectorDeltaFine) < 0:
+            gun_vector += (gunVectorDeltaFine + 360)
         else:
-            gunVector += gunVectorDeltaFine
+            gun_vector += gunVectorDeltaFine
     elif next_action == 3:
-        if (gunVector + gunVectorDeltaCoarse) < 0:
-            gunVector += (gunVectorDeltaCoarse + 360)
+        if (gun_vector + gunVectorDeltaCoarse) < 0:
+            gun_vector += (gunVectorDeltaCoarse + 360)
         else:
-            gunVector += gunVectorDeltaCoarse
+            gun_vector += gunVectorDeltaCoarse
     else:
         # Only 1 bullet at a time
         if not is_Fired:
@@ -152,7 +155,12 @@ def game_progress_avg():
     return str(int(avg_score_movement * 100))
 
 
-def draw_window(screen, soldier_group, player_rocket, enemy_fired, enemy_rocket, stat_disp):
+def display_player_number(screen, x, y, playernum, font):
+    player_number = font.render("PLAYER: " + str(playernum + 1), True, (255, 255, 255))
+    screen.blit(player_number, (x, y))
+
+
+def draw_window(screen, soldier_group, player_rocket, enemy_fired, enemy_rocket, stat_disp, player_number, playerX, playerY, player_disp):
     screen.fill((0, 0, 0))
     soldier_group.draw(screen)
 
@@ -163,6 +171,7 @@ def draw_window(screen, soldier_group, player_rocket, enemy_fired, enemy_rocket,
         enemy_rocket.draw(screen)
 
     display_hit_count(screen, 10, 10, stat_disp)
+    display_player_number(screen, playerX, playerY - 10, player_number, player_disp)
 
 
 def display_not_ready(screen, x, y, font):
@@ -176,7 +185,8 @@ def display_hit_count(screen, x, y, font):
     curr_score = font.render("SCORE: " + str(num_hit), True, (255, 255, 255))
     screen.blit(curr_score, (x, y))
     curr_avg = "{:.2f}".format(avg_score_movement)
-    curr_avg = font.render("AVG Reward: " + str(curr_avg), True, (255, 255, 255))
+    curr_avg = font.render(
+        "AVG Reward: " + str(curr_avg), True, (255, 255, 255))
     screen.blit(curr_avg, (x, y + 30))
 
 
@@ -191,11 +201,16 @@ def main():
     global hit_dodge_reward, near_enemy_reward, avg_score_movement
     enemy_fired = False
 
+    # Telegram Updater
+    global sio
+    action_count = 0
+
     pygame.init()
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption("2D MultiAI Playground")
     not_ready_disp = pygame.font.Font('freesansbold.ttf', 60, )
     stat_disp = pygame.font.Font('freesansbold.ttf', 22, )
+    player_disp = pygame.font.Font('freesansbold.ttf', 10, )
 
     # Loop Conditions
     running = True
@@ -219,8 +234,8 @@ def main():
     dqnMovement = ai_network.Dqn(6, 4, 0.75)
 
     # Initialize Data
-    initial_state = [(server.server_const.START_POS_P1_X, server.server_const.START_POS_P1_Y, False, 0, 0, -1),
-                     (server.server_const.START_POS_P2_X, server.server_const.START_POS_P2_Y, False, 0, 0, -1)]
+    initial_state = [(START_POS_P1_X, START_POS_P1_Y, False, 0, 0, -1),
+                     (START_POS_P2_X, START_POS_P2_Y, False, 0, 0, -1)]
 
     # Player & Enemy Initialization
     player = Soldier(initial_state[0][0], initial_state[0][1], False)
@@ -260,8 +275,8 @@ def main():
 
     # Main Loop
     while running:
-        # set game to 30fps
-        clock.tick(90)
+        # set game to 60 fps
+        clock.tick(60)
 
         # Button and Manual Firing
         for event in pygame.event.get():
@@ -392,23 +407,16 @@ def main():
         if enemyBulletY < 0:
             enemyBulletY = 0
 
-        # last_state update
-        last_state_movement = [enemyPosX / 800.0, enemyPosY / 600.0,
-                               enemyBulletX / 800.0, enemyBulletY / 600.0, playerPosX / 800.0, playerPosY / 600.0]
-
         # Toggle AI control and manual control
         if not manaul_ctrl:
-            #decision = random.randint(0, 1)
-            #if decision == 1:
-                #next_action_movement = dqnMovement.update(
-                #    last_reward_movement, last_state_movement)
-                #avg_score_movement = dqnMovement.overall_score()
-                #sliding_window_scores_Move.append(avg_score_movement)
-                #player.ai_move(next_action_movement)
-            #else:
             if number_step <= 0:
                 number_step = random.randint(1, 30)
                 action_to_take = random.randint(0, 3)
+
+            action_count += 1
+            if action_count > 1000:
+                action_count = 0
+                sio_update("Player: " + str(player_number + 1) + "\nNumber Hit: " + str(num_hit))
 
             player.ai_move(action_to_take)
             number_step -= 1
@@ -416,12 +424,59 @@ def main():
             player.manual_move()
 
         # Draw onto screen
-        draw_window(screen, soldier_group, player_rocket,
-                    enemy_state[INDEX_OF_IS_FIRED], enemy_rocket, stat_disp)
+        draw_window(screen, soldier_group, player_rocket, enemy_state[INDEX_OF_IS_FIRED], enemy_rocket, stat_disp,
+                    player_number, playerPosX, playerPosY, player_disp)
         pygame.display.update()
 
+    sio.disconnect()
     pygame.quit()
 
 
+def sio_connect():
+    """Creates a connection with the socketio server
+    """
+
+    global sio
+
+    try:
+        sio.connect(f"http://{HOST_IP_ADDRESS}:{HOST_UPDATE_PORT}")
+        print("Connected to socket server, SID:", sio.sid)
+
+    except Exception as e:
+        print(e)
+
+
+def sio_update(info: str):
+    """Updates socketio server with latest information
+
+    Args:
+        data (str): [description]
+    """
+
+    global sio
+
+    if sio.connected:
+        data = {
+            "learn_id": learn_id,
+            "info": str(info)
+        }
+        sio.emit("update", json.dumps(data))
+
+
+@sio.event
+def id_generation(id: str):
+    """Updates learn_id upon receiving "id_generation" event from server
+
+    Args:
+        id (str): Generated learn_id to be used for this training session
+    """
+    global learn_id
+
+    learn_id = id
+    print(f"Subscribe to learn id {learn_id} to receive updates on telegram!")
+
+
 if __name__ == "__main__":
-    main()
+    t1 = threading.Thread(target=main)
+    t1.start()
+    sio_connect()

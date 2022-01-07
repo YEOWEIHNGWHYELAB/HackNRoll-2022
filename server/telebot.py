@@ -1,4 +1,5 @@
 import re
+import requests
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext
 
@@ -26,26 +27,32 @@ class TeleBot():
     def subscribe(self, update: Update, cb_context: CallbackContext):
         """Called when telegram receives the "/subscribe" command
            Adds user who sent it to the subscribers list, notifying
-           them of the latest info received every 30 minutes 
+           them of the latest info received every 15 minutes 
 
         Args:
             update (Update): The message received on Telegram
             cb_context (CallbackContext): Context to be passed into repeating method
         """
 
-        pattern = r"\/subscribe\s*(\w*)"
+        pattern = r"\/subscribe\s*(\d+)(\s\d+)?"
         try:
-            learn_id = re.search(pattern, update.message.text).group(1)
-            msg = data_store.add_subscriber(
-                learn_id, update.message.from_user.name)
-            update.message.reply_text(msg)
+            chat_id = update.message.chat_id
+            search = re.search(pattern, update.message.text)
+            learn_id = search.group(1)
+            msg = data_store.add_subscriber(learn_id, chat_id)
 
             if "is now subscribed" in msg:
+                interval = (int(search.group(2))
+                            if search.group(2) else 15) * 60
+
                 cb_context.job_queue.run_repeating(
-                    self.send_update, 1800,
-                    context=[update.message.chat_id, learn_id],
-                    name=f"sub{update.message.from_user.name}{learn_id}"
+                    self.send_update, interval,
+                    context=[chat_id, learn_id],
+                    name=f"sub{chat_id}{learn_id}"
                 )
+
+            update.message.reply_text(msg)
+
         except:
             update.message.reply_text("Error with your message")
 
@@ -58,18 +65,16 @@ class TeleBot():
             update (Update): The message received on Telegram
             cb_context (CallbackContext): Context to be passed into repeating method
         """
-
         pattern = r"\/unsubscribe\s*(\w*)"
         try:
             learn_id = re.search(pattern, update.message.text).group(1)
-            msg = data_store.del_subscriber(
-                learn_id,
-                update.message.from_user.name
-            )
+            chat_id = update.message.chat_id
+
+            msg = data_store.del_subscriber(learn_id, chat_id)
             update.message.reply_text(msg)
 
             jobs = cb_context.job_queue.get_jobs_by_name(
-                f"sub{update.message.from_user.name}{learn_id}")
+                f"sub{chat_id}{learn_id}")
 
             for job in jobs:
                 job.schedule_removal()
@@ -113,6 +118,18 @@ class TeleBot():
                 text="There have been no updates"
             )
 
+    @staticmethod
+    def end_session(learn_id: str):
+        MSG_TEMPLATE = f"https://api.telegram.org/bot{POSTMAN_TOKEN}/sendMessage"
+        subscribers = data_store.get_subscribers(learn_id)
 
-bot = TeleBot()
-bot.start()
+        for chat_id in subscribers:
+            requests.post(MSG_TEMPLATE, data={
+                "chat_id": chat_id,
+                "text": f"Learning session {learn_id} has ended"
+            })
+
+
+if __name__ == "__main__":
+    bot = TeleBot()
+    bot.start()
