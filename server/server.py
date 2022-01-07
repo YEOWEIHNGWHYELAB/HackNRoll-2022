@@ -1,9 +1,8 @@
+# Sever Script must always be running while having multiple Client Script connected to it.
 
 from _thread import *
 import socket
 import server_const
-
-# Sever Script must always be running while having multiple Client Script connected to it.
 
 
 server = server_const.HOST_IP_ADDRESS
@@ -43,13 +42,13 @@ def game_data_to_string(data):
     return ",".join(data)
 
 
-currentPlayer = 0
+current_player = 0
 connected = set()
 games_session = {}
 idCount = 1
 
 
-def threaded_client(conn, player_index, gameId):
+def threaded_client(conn, player_index, game_id):
     global idCount
 
     conn.send(str.encode(str(player_index)))
@@ -59,7 +58,7 @@ def threaded_client(conn, player_index, gameId):
         try:
             data = read_game_data(conn.recv(4096).decode())
 
-            if gameId in games_session:
+            if game_id in games_session:
                 # If no Info received
                 if not data:
                     print("Disconnected")
@@ -67,17 +66,50 @@ def threaded_client(conn, player_index, gameId):
                 # If got Info
                 else:
                     if data[0] == 1:
-                        conn.sendall(str.encode(str(games_session[gameId][2])))
+                        conn.sendall(str.encode(str(games_session[game_id][2])))
+                    elif data[0] == 2:
+                        if player_index == 1:
+                            games_session[game_id][3] = data[1]
+                        else:
+                            games_session[game_id][5] = data[1]
+
+                        conn.sendall(str.encode(str("OK")))
+                    elif data[0] == 3:
+                        if player_index == 1:
+                            games_session[game_id][4] = (data[1] / 100.0)
+                        else:
+                            games_session[game_id][6] = (data[1] / 100.0)
+
+                        conn.sendall(str.encode(str("OK")))
+                    # Ready Status
+                    elif data[0] == 4:
+                        if player_index == 1:
+                            games_session[game_id][8] = 1
+                            games_session[game_id][7] = 0
+                            conn.sendall(str.encode(str(games_session[game_id][8])))
+                        else:
+                            games_session[game_id][8] = 0
+                            games_session[game_id][7] = 1
+                            conn.sendall(str.encode(str(games_session[game_id][7])))
+                    # Not Ready Status
+                    elif data[0] == 5:
+                        if player_index == 1:
+                            if games_session[game_id][7] == 1:
+                                conn.sendall(str.encode(str("1")))
+                            else:
+                                conn.sendall(str.encode(str("0")))
+                        else:
+                            if games_session[game_id][8] == 1:
+                                conn.sendall(str.encode(str("0")))
+                            else:
+                                conn.sendall(str.encode(str("1")))
                     else:
-                        games_session[gameId][player_index] = data
+                        games_session[game_id][player_index] = data
 
                         if player_index == 1:
-                            reply = games_session[gameId][0]
+                            reply = games_session[game_id][0]
                         else:
-                            reply = games_session[gameId][1]
-
-                        # print("Received: ", data)
-                        # print("Sending: ", reply)
+                            reply = games_session[game_id][1]
 
                         conn.sendall(str.encode(game_data_to_string(reply)))
             else:
@@ -89,8 +121,8 @@ def threaded_client(conn, player_index, gameId):
     print("Lost Connection")
 
     try:
-        del games_session[gameId]
-        print("Closing Game", gameId)
+        del games_session[game_id]
+        print("Closing Game", game_id)
     except:
         pass
 
@@ -105,23 +137,24 @@ while True:
     print("Connected to:", addr)
 
     # ID management
-    currentPlayer = 0
-    gameId = (idCount - 1) // 2
+    current_player = 0
+    game_id = (idCount - 1) // 2
 
     # If is player 1
     if idCount % 2 == 1:
-        games_session[gameId] = [(server_const.START_POS_P1_X, server_const.START_POS_P1_Y, False, 0, 0, -1),
-                                 (server_const.START_POS_P2_X, server_const.START_POS_P2_Y, False, 0, 0, -1), 0]
+        games_session[game_id] = [(server_const.START_POS_P1_X, server_const.START_POS_P1_Y, False, 0, 0, -1),
+                                  (server_const.START_POS_P2_X, server_const.START_POS_P2_Y, False, 0, 0, -1), 0,
+                                  0, 0.0, 0, 0.0, 0, 0]
 
         print("Creating a new game...")
 
     # If is player 2
     else:
-        currentPlayer = 1
-        games_session[gameId][2] = 1
+        current_player = 1
+        games_session[game_id][2] = 1
 
     # Increment ID Count
     idCount += 1
 
     # Assign new thread
-    start_new_thread(threaded_client, (conn, currentPlayer, gameId))
+    start_new_thread(threaded_client, (conn, current_player, game_id))

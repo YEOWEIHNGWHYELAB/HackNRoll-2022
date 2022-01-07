@@ -150,11 +150,8 @@ def main():
                 running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
-                    data = {
-                        "learn_id": learn_id,
-                        "info": f"last_reward: {last_reward}"
-                    }
-                    sio.emit("update", json.dumps(data))
+                    sio_update(f"last_reward: {last_reward}")
+
                     dqnShooting.save(SHOOTING_AI_NETWORK)
                     plt.plot(sliding_window_scores)
                     plt.show()
@@ -281,17 +278,45 @@ def main():
     sio.disconnect()
 
 
-def sio_setup():
-    global sio, learn_id
+def sio_connect():
+    """Creates a connection with the socketio server
+    """
+
+    global sio
     sio.connect(f"http://{HOST_IP_ADDRESS}:{HOST_UPDATE_PORT}")
     print("Connected to socket server, SID:", sio.sid)
 
-    learn_id = str(random.randint(100, 10000))
-    sio.emit("new_learning_state", learn_id)
+
+def sio_update(info: str):
+    """Updates socketio server with latest information
+
+    Args:
+        data (str): [description]
+    """
+
+    global sio
+
+    data = {
+        "learn_id": learn_id,
+        "info": info
+    }
+    sio.emit("update", json.dumps(data))
+
+
+@sio.event
+def id_generation(id: str):
+    """Updates learn_id upon receiving "id_generation" event from server
+
+    Args:
+        id (str): Generated learn_id to be used for this training session
+    """
+    global learn_id
+
+    learn_id = id
     print(f"Subscribe to learn id {learn_id} to receive updates on telegram!")
 
 
 if __name__ == "__main__":
     t1 = threading.Thread(target=main)
     t1.start()
-    sio_setup()
+    sio_connect()

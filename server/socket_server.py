@@ -16,6 +16,7 @@ sid_table = {}
 def connect(sid: str, env: dict):
     """When learning session connects with the socketio server, it generates a 
        learn ID for them which will be used to keep track of any information
+
     Args:
         sid (str): Socket ID of learning session
         env (dict): Server environment variables
@@ -42,6 +43,7 @@ def connect(sid: str, env: dict):
 def disconnect(sid: str):
     """When learning session disconnects from the socketio server
        all information of it will be deleted
+
     Args:
         sid (str): Socket ID of learning session
     """
@@ -59,6 +61,7 @@ def disconnect(sid: str):
 @sio.event
 def update(sid: str, data: str):
     """Updates latest information of learning model upon receiving "update" event from learning model
+
     Args:
         sid (str): Socket ID of learning session
         data (str): JSON string in the format of {

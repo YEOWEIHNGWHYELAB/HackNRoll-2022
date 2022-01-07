@@ -27,6 +27,7 @@ class TeleBot():
         """Called when telegram receives the "/subscribe" command
            Adds user who sent it to the subscribers list, notifying
            them of the latest info received every 30 minutes 
+
         Args:
             update (Update): The message received on Telegram
             cb_context (CallbackContext): Context to be passed into repeating method
@@ -52,6 +53,7 @@ class TeleBot():
         """Called when telegram receives the "/unsubscribe" command
            Removes user who sent it from the subscribers list, stopping
            notifications of the latest info received every 30 minutes 
+
         Args:
             update (Update): The message received on Telegram
             cb_context (CallbackContext): Context to be passed into repeating method
@@ -78,6 +80,7 @@ class TeleBot():
     def get_update(self, update: Update, cb_context: CallbackContext):
         """Called when telegram receives the "/update" command
            Sends the user the latest info received from training
+
         Args:
             update (Update): The message received on Telegram
             cb_context (CallbackContext): Context to be passed into repeating method
@@ -94,6 +97,7 @@ class TeleBot():
     def send_update(self, cb_context: CallbackContext):
         """Repeating method, will call itself every 30 minutes if user subscribes
            to a particular learning session
+
         Args:
             cb_context (CallbackContext): Context passed from subscribe() method
         """
