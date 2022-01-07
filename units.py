@@ -18,7 +18,7 @@ class Rocket(pygame.sprite.Sprite):
         self.source = source
         self.dest = dest
 
-        self.vel_base = 10
+        self.vel_base = 15
         self.vel_x = self.vel_base
         self.vel_y = 0
         self.target = target
@@ -161,7 +161,7 @@ class Soldier(pygame.sprite.Sprite):
         self.rect.y = y
 
         self.flip = flip
-        self.vel = 10
+        self.vel = 6
 
     def draw(self, screen: pygame.Surface):
         screen.blit(self.image, self.rect)
@@ -211,7 +211,7 @@ class Soldier(pygame.sprite.Sprite):
         dx = self.target.rect.centerx - self.rect.centerx
         return (math.atan2(dy, dx) * 180 / math.pi) + 180
 
-    def shoot(self, dest: Tuple[int, int]) -> Rocket:
+    def shoot(self, dest: Tuple[int]) -> Rocket:
         """Shoots a rocket at coordinate dest
 
         Args:
