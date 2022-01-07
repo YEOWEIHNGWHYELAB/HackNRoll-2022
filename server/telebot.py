@@ -1,4 +1,5 @@
 import re
+import requests
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext
 
@@ -27,6 +28,7 @@ class TeleBot():
         """Called when telegram receives the "/subscribe" command
            Adds user who sent it to the subscribers list, notifying
            them of the latest info received every 15 minutes 
+
         Args:
             update (Update): The message received on Telegram
             cb_context (CallbackContext): Context to be passed into repeating method
@@ -34,10 +36,10 @@ class TeleBot():
 
         pattern = r"\/subscribe\s*(\d+)(\s\d+)?"
         try:
-            username = update.message.from_user.name
+            chat_id = update.message.chat_id
             search = re.search(pattern, update.message.text)
             learn_id = search.group(1)
-            msg = data_store.add_subscriber(learn_id, username)
+            msg = data_store.add_subscriber(learn_id, chat_id)
 
             if "is now subscribed" in msg:
                 interval = (int(search.group(2))
@@ -45,8 +47,8 @@ class TeleBot():
 
                 cb_context.job_queue.run_repeating(
                     self.send_update, interval,
-                    context=[update.message.chat_id, learn_id],
-                    name=f"sub{username}{learn_id}"
+                    context=[chat_id, learn_id],
+                    name=f"sub{chat_id}{learn_id}"
                 )
 
             update.message.reply_text(msg)
@@ -58,6 +60,7 @@ class TeleBot():
         """Called when telegram receives the "/unsubscribe" command
            Removes user who sent it from the subscribers list, stopping
            notifications of the latest info received every 30 minutes 
+
         Args:
             update (Update): The message received on Telegram
             cb_context (CallbackContext): Context to be passed into repeating method
@@ -66,14 +69,13 @@ class TeleBot():
         pattern = r"\/unsubscribe\s*(\w*)"
         try:
             learn_id = re.search(pattern, update.message.text).group(1)
-            msg = data_store.del_subscriber(
-                learn_id,
-                update.message.from_user.name
-            )
+            chat_id = update.message.chat_id
+
+            msg = data_store.del_subscriber(learn_id, chat_id)
             update.message.reply_text(msg)
 
             jobs = cb_context.job_queue.get_jobs_by_name(
-                f"sub{update.message.from_user.name}{learn_id}")
+                f"sub{chat_id}{learn_id}")
 
             for job in jobs:
                 job.schedule_removal()
@@ -84,6 +86,7 @@ class TeleBot():
     def get_update(self, update: Update, cb_context: CallbackContext):
         """Called when telegram receives the "/update" command
            Sends the user the latest info received from training
+
         Args:
             update (Update): The message received on Telegram
             cb_context (CallbackContext): Context to be passed into repeating method
@@ -100,6 +103,7 @@ class TeleBot():
     def send_update(self, cb_context: CallbackContext):
         """Repeating method, will call itself every 30 minutes if user subscribes
            to a particular learning session
+
         Args:
             cb_context (CallbackContext): Context passed from subscribe() method
         """
@@ -115,6 +119,18 @@ class TeleBot():
                 text="There have been no updates"
             )
 
+    @staticmethod
+    def end_session(learn_id: str):
+        MSG_TEMPLATE = f"https://api.telegram.org/bot{POSTMAN_TOKEN}/sendMessage"
+        subscribers = data_store.get_subscribers(learn_id)
 
-bot = TeleBot()
-bot.start()
+        for chat_id in subscribers:
+            requests.post(MSG_TEMPLATE, data={
+                "chat_id": chat_id,
+                "text": f"Learning session {learn_id} has ended"
+            })
+
+
+if __name__ == "__main__":
+    bot = TeleBot()
+    bot.start()

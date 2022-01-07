@@ -4,6 +4,7 @@ import json
 import random
 
 import data_store
+from telebot import TeleBot
 import server_const
 
 sio = socketio.Server()
@@ -52,6 +53,9 @@ def disconnect(sid: str):
 
     # deletes training session when learning model disconnects
     if sid in sid_table:
+        # broadcasts message on termination
+        TeleBot.end_session(sid_table[sid])
+
         data_store.del_learning_state(sid_table[sid])
         del sid_table[sid]
 
