@@ -83,7 +83,7 @@ def cal_movement_reward(playerPosX, playerPosY, MOVEMENT_LIVING_PENALTY):
     global hit_dodge_reward, near_enemy_reward
 
     final_movement_reward = hit_dodge_reward + MOVEMENT_LIVING_PENALTY + near_enemy_reward
-
+    # print(hit_dodge_reward, MOVEMENT_LIVING_PENALTY, near_enemy_reward)
 
     return final_movement_reward
 
@@ -257,8 +257,8 @@ def main():
     is_enemy_bullet_Y = bool(a[9])
     is_enemy_bullet_dist = bool(a[10])
     number_of_states = a[4] + a[5] + a[6] + a[7] + a[8] + a[9] + a[10]
-
-
+    # print(number_of_states)
+    # print(is_enemy_pos_X, is_enemy_pos_Y, is_player_pos_X, is_player_pos_Y, is_enemy_bullet_X, is_enemy_bullet_Y, is_enemy_bullet_dist)
 
     # Loop Conditions
     running = True
@@ -453,7 +453,7 @@ def main():
 
         # last_state update
         last_state_movement = []
-
+        
         if is_enemy_bullet_X:
             last_state_movement.append(enemyBulletX / 800.0)
         if is_enemy_bullet_Y:
