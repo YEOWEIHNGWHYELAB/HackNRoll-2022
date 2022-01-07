@@ -1,5 +1,9 @@
+import array
+
 import pygame
 from matplotlib import pyplot as plt
+import threading
+import socketio
 
 from network import Network
 
@@ -9,12 +13,25 @@ import ai_network
 import server.server_const
 from const import MOVEMENT_AI_NETWORK
 
+import json
+import tkinter as tk
+from tkinter import *
 import os
 
+# Override Intel MKL
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 # State Const
 INDEX_OF_IS_FIRED = 2
+
+# Param To Include
+is_enemy_pos_X = False
+is_enemy_pos_Y = False
+is_player_pos_X = False
+is_player_pos_Y = False
+is_enemy_bullet_X = False
+is_enemy_bullet_Y = False
+is_enemy_bullet_dist = False
 
 # Movement Reward Const
 MOVEMENT_LIVING_PENALTY = -0.005
@@ -22,24 +39,11 @@ HIT_PENALTY = -1.0
 NEAR_ENEMY_REWARD = 0.05
 DODGE_REWARD = 0.2
 
-# Shooting Reward Const
-MISS_PENALTY = -0.02
-FIRING_NOT_READY_PENALTY = -0.01
-SHOOTING_LIVING_PENALTY = -0.3
-HIT_REWARD = 1
-FIRING_REWARD = 0.2
-POINTING_GUN_AT_TARGET_REWARD = 0.01
-
-# Gun Vector Adjust
-gunVectorDeltaFineA = 1
-gunVectorDeltaCoarseA = 20
-gunVectorDeltaFine = -1
-gunVectorDeltaCoarse = -20
-
 # Initialize Movement Param
 enemyPosX = 0
 enemyPosY = 0
 enemyBulletX = 0
+enemyBulletY = 0
 enemyBulletY = 0
 playerPosX = 0
 playerPosY = 0
@@ -50,74 +54,42 @@ anglePlayerToEnemy = 0
 distancePlayerToEnemy = 0
 gunVector = 0
 
+# Reward for Movement
+hit_dodge_reward = 0
+near_enemy_reward = 0
+
 # Reward for shooting
 hit_reward = 0
 reward_pointing_near_target = 0
 gun_ready_reward = 0
 
-# Reward for Movement
-hit_dodge_reward = 0
-near_enemy_reward = 0
-
 # Scores
 num_hit = 0
 avg_score_movement = 0.0
 
+# Telegram updater
+sio = socketio.Client()
+learn_id = "-1"
+action_count = 0
 
-def cal_shooting_reward():
-    pass
+# User inputs
+MOVEMENT_LIVING_PENALTY_ = -0.005
+HIT_PENALTY_ = -6.0
+NEAR_ENEMY_PENALTY_ = -1.0
+ENEMY_MISS_REWARD_ = 0.0
 
 
-def cal_movement_reward(playerPosX, playerPosY):
+def cal_movement_reward(playerPosX, playerPosY, MOVEMENT_LIVING_PENALTY):
     global hit_dodge_reward, near_enemy_reward
-    # edgePenalty = 0
 
-    # if playerPosX >= 700 or playerPosX <= 30:
-        # edgePenalty = -1.0
-    # elif playerPosY >= 500 or playerPosY <= 30:
-        # edgePenalty = -1.0
-
-    # final_movement_reward = hit_dodge_reward + near_enemy_reward + MOVEMENT_LIVING_PENALTY + edgePenalty
     final_movement_reward = hit_dodge_reward + MOVEMENT_LIVING_PENALTY + near_enemy_reward
+
 
     return final_movement_reward
 
 
 def ai_firing(rocket_group, player):
     rocket_group.add(player.shoot_angle(gunVector))
-
-
-def ai_shoot(next_action, rocket_group, player):
-    global gunVector, is_Fired, gun_ready_reward
-
-    if next_action == 0:
-        if (gunVector + gunVectorDeltaFineA) > 360:
-            gunVector += (gunVectorDeltaFineA - 360)
-        else:
-            gunVector += gunVectorDeltaFineA
-    elif next_action == 1:
-        if (gunVector + gunVectorDeltaCoarseA) > 360:
-            gunVector += (gunVectorDeltaCoarseA - 360)
-        else:
-            gunVector += gunVectorDeltaCoarseA
-    elif next_action == 2:
-        if (gunVector + gunVectorDeltaFine) < 0:
-            gunVector += (gunVectorDeltaFine + 360)
-        else:
-            gunVector += gunVectorDeltaFine
-    elif next_action == 3:
-        if (gunVector + gunVectorDeltaCoarse) < 0:
-            gunVector += (gunVectorDeltaCoarse + 360)
-        else:
-            gunVector += gunVectorDeltaCoarse
-    else:
-        # Only 1 bullet at a time
-        if not is_Fired:
-            ai_firing(rocket_group, player)
-            is_Fired = True
-            gun_ready_reward = FIRING_REWARD
-        else:
-            gun_ready_reward = FIRING_NOT_READY_PENALTY
 
 
 def read_game_data(data):
@@ -151,7 +123,8 @@ def game_progress_avg():
     return str(int(avg_score_movement * 100))
 
 
-def draw_window(screen, soldier_group, player_rocket, enemy_fired, enemy_rocket, stat_disp):
+def draw_window(screen, soldier_group, player_rocket, enemy_fired, enemy_rocket, stat_disp, player_number, playerX,
+                playerY, player_disp):
     screen.fill((0, 0, 0))
     soldier_group.draw(screen)
 
@@ -162,6 +135,7 @@ def draw_window(screen, soldier_group, player_rocket, enemy_fired, enemy_rocket,
         enemy_rocket.draw(screen)
 
     display_hit_count(screen, 10, 10, stat_disp)
+    display_player_number(screen, playerX, playerY - 10, player_number, player_disp)
 
 
 def display_not_ready(screen, x, y, font):
@@ -185,6 +159,62 @@ def display_hit_status(screen, x, y, font, hit_miss):
     else:
         hit_stat = font.render("I'm Hit!" + str(num_hit), True, (255, 255, 255))
     screen.blit(hit_stat, (x, y))
+
+
+def display_player_number(screen, x, y, playernum, font):
+    player_number = font.render("PLAYER: " + str(playernum + 1), True, (255, 255, 255))
+    screen.blit(player_number, (x, y))
+
+
+def sio_connect():
+    """Creates a connection with the socketio server
+    """
+
+    global sio
+
+    try:
+        sio.connect(f"http://{server.server_const.HOST_IP_ADDRESS}:{server.server_const.HOST_UPDATE_PORT}")
+        print("Connected to socket server, SID:", sio.sid)
+
+    except Exception as e:
+        print(e)
+
+
+def sio_update(info: str):
+    """Updates socketio server with latest information
+
+    Args:
+        data (str): [description]
+    """
+
+    global sio
+
+    if sio.connected:
+        data = {
+            "learn_id": learn_id,
+            "info": str(info)
+        }
+        sio.emit("update", json.dumps(data))
+
+
+@sio.event
+def id_generation(id: str):
+    """Updates learn_id upon receiving "id_generation" event from server
+
+    Args:
+        id (str): Generated learn_id to be used for this training session
+    """
+    global learn_id
+
+    learn_id = id
+    print(f"Subscribe to learn id {learn_id} to receive updates on telegram!")
+
+
+def plot_graph(sliding_window_scores_move):
+    plt.plot(sliding_window_scores_move)
+    plt.xlabel('Number of Iteration', fontsize=14)
+    plt.ylabel('Average Reward', fontsize=14)
+    plt.savefig('./saved_graph/Training_Graph.png')
 
 
 def main():
