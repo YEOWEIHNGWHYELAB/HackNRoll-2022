@@ -53,7 +53,7 @@ class Dqn(object):
         self.sliding_reward_window = []
         self.model = Network(input_size, nb_action)
         self.memory = ReplayMemory(100000)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         self.last_state = torch.Tensor(input_size).unsqueeze(0)
         self.last_action = 0
         self.last_reward = 0
